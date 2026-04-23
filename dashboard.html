@@ -1,0 +1,1011 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>TopDev Jobs Dashboard</title>
+  <style>
+    :root {
+      --bg: #f7f8fa;
+      --card: #fff;
+      --text: #1a1f2e;
+      --muted: #6b7280;
+      --border: #e5e7eb;
+      --accent: #2563eb;
+      --accent-soft: #dbeafe;
+      --hot: #f97316;
+      --hot-soft: #fed7aa;
+      --green: #16a34a;
+      --green-soft: #dcfce7;
+      --radius: 8px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: var(--bg); color: var(--text); }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    header { background: var(--card); border-bottom: 1px solid var(--border); padding: 14px 24px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+    header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    .muted { color: var(--muted); font-size: 13px; }
+
+    .btn { background: var(--accent); color: #fff; border: none; padding: 7px 14px; border-radius: var(--radius); cursor: pointer; font-size: 13px; font-family: inherit; }
+    .btn:hover { filter: brightness(0.95); }
+    .btn-ghost { background: transparent; color: var(--accent); border: 1px solid var(--border); }
+
+    .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; padding: 20px 24px 8px; }
+    .stat { background: var(--card); padding: 14px 16px; border-radius: var(--radius); border: 1px solid var(--border); }
+    .stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.6px; font-weight: 600; }
+    .stat-value { font-size: 22px; font-weight: 600; margin-top: 4px; }
+    .stat-sub { color: var(--muted); font-size: 12px; margin-top: 2px; }
+
+    .filters { padding: 12px 24px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+    .filters input, .filters select { padding: 7px 10px; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); font-size: 13px; font-family: inherit; color: inherit; }
+    .filters input[type=search] { flex: 1; min-width: 220px; }
+
+    main { display: grid; grid-template-columns: 300px 1fr; gap: 16px; padding: 0 24px 24px; align-items: start; }
+    @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
+
+    .panel { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; }
+    .panel + .panel { margin-top: 12px; }
+    .panel h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 600; }
+
+    .bar-row { display: flex; align-items: center; gap: 8px; padding: 5px 6px; margin: 0 -6px; cursor: pointer; font-size: 13px; border-radius: 4px; }
+    .bar-row:hover { background: var(--bg); }
+    .bar-row.active { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .bar-row .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .bar-row .bar { flex: 0 0 80px; height: 6px; background: var(--border); border-radius: 3px; overflow: hidden; }
+    .bar-row .bar > span { display: block; height: 100%; background: var(--accent); }
+    .bar-row.active .bar > span { background: var(--accent); }
+    .bar-row .count { flex: 0 0 auto; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 24px; text-align: right; }
+
+    .results-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; gap: 12px; flex-wrap: wrap; }
+    .sort-bar { display: flex; gap: 4px; }
+    .sort-bar button { background: var(--card); border: 1px solid var(--border); padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 12px; font-family: inherit; color: inherit; }
+    .sort-bar button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+    .job-list { display: flex; flex-direction: column; gap: 8px; }
+    .job-card { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 14px 16px; cursor: pointer; transition: border-color 0.1s, transform 0.1s; }
+    .job-card:hover { border-color: var(--accent); }
+    .job-title { font-weight: 600; font-size: 15px; margin: 0 0 4px; }
+    .job-company { color: var(--accent); font-size: 13px; font-weight: 500; }
+    .job-meta { display: flex; flex-wrap: wrap; gap: 6px 10px; font-size: 13px; color: var(--muted); margin: 6px 0 8px; align-items: center; }
+    .job-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 8px; }
+    .tag { padding: 2px 8px; border-radius: 4px; font-size: 12px; background: #f3f4f6; color: #4b5563; }
+    .tag.skill { background: var(--accent-soft); color: var(--accent); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px; }
+    .badge.hot { background: var(--hot-soft); color: var(--hot); }
+    .badge.salary { background: var(--green-soft); color: var(--green); text-transform: none; letter-spacing: 0; }
+
+    .pagination { display: flex; justify-content: center; gap: 4px; margin-top: 16px; flex-wrap: wrap; }
+    .pagination button { background: var(--card); border: 1px solid var(--border); padding: 6px 11px; border-radius: 4px; cursor: pointer; font-size: 13px; font-family: inherit; color: inherit; min-width: 34px; }
+    .pagination button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+    .pagination button.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .pagination button:disabled { opacity: 0.4; cursor: not-allowed; }
+    .pagination span { padding: 6px 4px; color: var(--muted); }
+
+    .modal-backdrop { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.55); display: none; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; z-index: 10; }
+    .modal-backdrop.show { display: flex; }
+    .modal { background: var(--card); border-radius: var(--radius); max-width: 820px; width: 100%; padding: 24px 28px 28px; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
+    .modal .close { position: absolute; top: 10px; right: 10px; background: transparent; border: none; font-size: 22px; cursor: pointer; color: var(--muted); width: 32px; height: 32px; border-radius: 16px; line-height: 1; }
+    .modal .close:hover { background: var(--bg); color: var(--text); }
+    .modal h2 { margin: 0 0 4px; font-size: 20px; }
+    .modal h4 { margin: 18px 0 8px; color: var(--accent); font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; }
+    .modal pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; margin: 0; line-height: 1.55; }
+    .company-grid { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; font-size: 13px; margin: 0; }
+    .company-grid dt { color: var(--muted); }
+    .company-grid dd { margin: 0; }
+
+    .empty, .loader { text-align: center; padding: 40px 20px; color: var(--muted); }
+    .empty pre { display: inline-block; text-align: left; background: var(--card); border: 1px solid var(--border); padding: 10px 14px; border-radius: var(--radius); font-size: 13px; }
+
+    /* Report */
+    .report { margin: 0 24px 12px; background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+    .report > summary { list-style: none; cursor: pointer; padding: 14px 18px; display: flex; align-items: center; gap: 10px; user-select: none; }
+    .report > summary::-webkit-details-marker { display: none; }
+    .report > summary::before { content: '▸'; color: var(--muted); transition: transform 0.15s; font-size: 12px; }
+    .report[open] > summary::before { transform: rotate(90deg); }
+    .report > summary h2 { margin: 0; font-size: 15px; font-weight: 600; }
+    .report > summary .rep-meta { color: var(--muted); font-size: 13px; font-weight: normal; margin-left: auto; }
+    .report-body { padding: 4px 18px 18px; border-top: 1px solid var(--border); }
+    .report-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 18px; margin-top: 14px; }
+    @media (max-width: 800px) { .report-grid { grid-template-columns: 1fr; } }
+    .rep-section h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.6px; color: var(--muted); font-weight: 600; }
+    .rep-section.span-2 { grid-column: 1 / -1; }
+    .rep-stats { display: flex; flex-wrap: wrap; gap: 16px 24px; margin-bottom: 12px; }
+    .rep-stat { display: flex; flex-direction: column; }
+    .rep-stat-label { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .rep-stat-value { font-size: 18px; font-weight: 600; }
+    .rep-narrative { color: var(--text); font-size: 14px; line-height: 1.6; margin: 0 0 8px; }
+    .rep-narrative b { color: var(--accent); }
+    .rep-copy { margin-left: 8px; padding: 4px 10px; font-size: 12px; background: var(--card); color: var(--accent); border: 1px solid var(--border); border-radius: 4px; cursor: pointer; font-family: inherit; }
+    .rep-copy:hover { border-color: var(--accent); }
+    .rep-copy.ok { background: var(--green-soft); color: var(--green); border-color: var(--green); }
+    .rep-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+    .rep-list .bar-row { cursor: default; }
+    .rep-list .bar-row:hover { background: transparent; }
+
+    /* Vertical column chart cho salary distribution */
+    .salary-chart { display: flex; gap: 6px; margin-top: 10px; }
+    .salary-chart .col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; }
+    .salary-chart .count { font-size: 11px; color: var(--muted); font-variant-numeric: tabular-nums; height: 16px; line-height: 16px; }
+    .salary-chart .col-bar { width: 100%; max-width: 44px; height: 160px; display: flex; align-items: flex-end; }
+    .salary-chart .bar { width: 100%; background: var(--accent); border-radius: 3px 3px 0 0; transition: filter 0.1s; min-height: 1px; }
+    .salary-chart .col:hover .bar { filter: brightness(1.15); }
+    .salary-chart .label { font-size: 11px; color: var(--muted); margin-top: 8px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>TopDev Jobs Dashboard</h1>
+    <span class="muted" id="source-info"></span>
+    <span style="flex:1"></span>
+    <label class="btn btn-ghost" style="cursor:pointer;display:inline-flex;align-items:center;gap:6px">
+      <span>Load JSON file…</span>
+      <input type="file" accept=".json" id="file-input" style="display:none" />
+    </label>
+  </header>
+
+  <section class="stats" id="stats" hidden></section>
+
+  <details class="report" id="report" hidden open>
+    <summary>
+      <h2>Summary report</h2>
+      <span class="rep-meta" id="rep-meta"></span>
+      <button class="rep-copy" id="rep-copy" onclick="event.preventDefault();event.stopPropagation();">Copy as Markdown</button>
+    </summary>
+    <div class="report-body" id="report-body"></div>
+  </details>
+
+  <section class="filters" id="filters" hidden>
+    <input type="search" id="q" placeholder="Tìm title / company / skill…" />
+    <select id="f-location"><option value="">All locations</option></select>
+    <select id="f-mode">
+      <option value="">All modes</option>
+      <option value="office">At office</option>
+      <option value="hybrid">Hybrid</option>
+      <option value="remote">Remote</option>
+    </select>
+    <select id="f-quick">
+      <option value="">Quick filter…</option>
+      <option value="salary">Has salary</option>
+      <option value="hot">HOT / SUPER HOT</option>
+    </select>
+    <button class="btn btn-ghost" id="btn-clear">Clear all</button>
+  </section>
+
+  <main id="main" hidden>
+    <aside>
+      <div class="panel">
+        <h3>Top skills</h3>
+        <div id="chart-skills"></div>
+      </div>
+      <div class="panel">
+        <h3>Top companies</h3>
+        <div id="chart-companies"></div>
+      </div>
+      <div class="panel">
+        <h3>Working mode</h3>
+        <div id="chart-modes"></div>
+      </div>
+    </aside>
+    <section>
+      <div class="results-header">
+        <div class="muted" id="count"></div>
+        <div class="sort-bar">
+          <button data-sort="posted" class="active">Recent</button>
+          <button data-sort="salary">Salary ↓</button>
+          <button data-sort="title">A–Z</button>
+        </div>
+      </div>
+      <div class="job-list" id="job-list"></div>
+      <div class="pagination" id="pagination"></div>
+    </section>
+  </main>
+
+  <div class="loader" id="loader">Loading <code>topdev-jobs.json</code>…</div>
+  <div class="empty" id="empty" hidden>
+    <p>Không load được <code>topdev-jobs.json</code> qua <code>fetch()</code>.<br />
+    Trình duyệt chặn fetch khi mở file qua <code>file://</code>.</p>
+    <p>Chạy local server (trong thư mục dự án) rồi mở dashboard:</p>
+    <pre>npx serve .
+# hoặc:
+python -m http.server 8000</pre>
+    <p>hoặc click <b>Load JSON file…</b> phía trên để chọn file thủ công.</p>
+  </div>
+
+  <div class="modal-backdrop" id="modal-backdrop"><div class="modal" id="modal"></div></div>
+
+  <script>
+    const PAGE_SIZE = 25;
+    const state = {
+      jobs: [],
+      filter: { q: '', location: '', mode: '', quick: '', skill: '', company: '' },
+      sort: 'posted',
+      page: 1,
+      _visibleList: [],
+    };
+
+    // ============ parsers ============
+    // Tỉ giá USD→VND lấy từ @fawazahmed0/currency-api (free, CDN qua jsDelivr);
+    // cache 6h trong localStorage; fallback 25,000 nếu offline/API fail.
+    const RATE_CACHE_KEY = 'topdev-dashboard.usdvnd';
+    const RATE_CACHE_TTL_MS = 6 * 3600 * 1000;
+    let usdVndRate = 25000;             // VND cần để đổi 1 USD
+    let USD_PER_VND = 1 / usdVndRate;   // dùng cho tính toán
+    let rateSource = 'fallback';        // 'api' | 'cache' | 'fallback'
+    let rateFetchedAt = null;
+
+    async function loadRate() {
+      try {
+        const cachedRaw = localStorage.getItem(RATE_CACHE_KEY);
+        if (cachedRaw) {
+          const cached = JSON.parse(cachedRaw);
+          if (cached && typeof cached.rate === 'number' && Date.now() - cached.at < RATE_CACHE_TTL_MS) {
+            usdVndRate = cached.rate;
+            USD_PER_VND = 1 / cached.rate;
+            rateSource = 'cache';
+            rateFetchedAt = new Date(cached.at);
+            return;
+          }
+        }
+        const res = await fetch('https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/usd.json');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const data = await res.json();
+        const rate = data?.usd?.vnd;
+        if (typeof rate === 'number' && rate > 0) {
+          usdVndRate = rate;
+          USD_PER_VND = 1 / rate;
+          rateSource = 'api';
+          rateFetchedAt = new Date();
+          localStorage.setItem(RATE_CACHE_KEY, JSON.stringify({ rate, at: Date.now() }));
+        }
+      } catch (err) {
+        console.warn('[rate] fetch failed, using fallback 25,000:', err.message);
+        rateSource = 'fallback';
+      }
+    }
+
+    // Parse salary string với nhiều format:
+    //   USD: "1,100 - 2,000 USD", "Up to 2400$", "From $1300", "Up-to 34,000 usd/year"
+    //   VND: "30,000,000 - 50,000,000đ", "Up to 35m", "60-80 triệu", "20-25tr gross",
+    //        "Upto 70.000.000 vnđ", "18,000,000-30,000,000" (raw)
+    //   Skip: "Thỏa thuận", "Negotiable", "You'll love it", "Very attractive!!!", ...
+    // Trả về { min, max, currency, minUSD, maxUSD } hoặc null.
+    function parseSalary(s) {
+      if (!s) return null;
+      if (/sign in|love it|negotiab|negotiat|attractive|competitive|thỏa thuận|best in|full bhxh|surely love|lương cao/i.test(s)) return null;
+
+      const isUSD = /USD|usd|\$/.test(s);
+      const isVND = /VND|vnd|vnđ|đ\b|đ$|đ\s|đồng/i.test(s);
+      const hasM = /\d\s*m\b/i.test(s);
+      const hasTr = /\d\s*tr\b/i.test(s);
+      const hasTrieu = /triệu/i.test(s);
+      const hasMillion = hasM || hasTr || hasTrieu;
+
+      let currency = isUSD ? 'USD' : ((isVND || hasMillion) ? 'VND' : null);
+
+      // Chuẩn hoá chuỗi để extract số
+      let str = s.replace(/USD|usd|VND|vnd|vnđ|đồng|triệu|\$|\(.*?\)|gross/gi, ' ');
+      str = str.replace(/đ/g, ' ');
+      str = str.replace(/(\d)\s*m\b/gi, '$1');
+      str = str.replace(/(\d)\s*tr\b/gi, '$1');
+      // Dotted thousands VND: "70.000.000" → "70000000"
+      while (/\d\.\d{3}/.test(str)) str = str.replace(/(\d)\.(\d{3})/g, '$1$2');
+
+      const perYear = /\/year|per\s*year|annually/i.test(s);
+
+      let min = null, max = null;
+      const range = str.match(/([\d,]+)\s*(?:-|to)\s*([\d,]+)/i);
+      const upTo = str.match(/(?:up\s*[-\s]*to|upto)\s*([\d,]+)/i);
+      const from = str.match(/from\s*([\d,]+)/i);
+
+      if (range) {
+        min = parseInt(range[1].replace(/,/g, ''));
+        max = parseInt(range[2].replace(/,/g, ''));
+      } else if (upTo) {
+        min = 0;
+        max = parseInt(upTo[1].replace(/,/g, ''));
+      } else if (from) {
+        min = parseInt(from[1].replace(/,/g, ''));
+        max = min;
+      } else {
+        return null;
+      }
+
+      if (hasMillion) {
+        min *= 1_000_000;
+        max *= 1_000_000;
+        currency = 'VND';
+      }
+      if (!currency) currency = max >= 1_000_000 ? 'VND' : 'USD';
+
+      if (perYear) {
+        min = Math.round(min / 12);
+        max = Math.round(max / 12);
+      }
+
+      const minUSD = currency === 'VND' ? Math.round(min * USD_PER_VND) : min;
+      const maxUSD = currency === 'VND' ? Math.round(max * USD_PER_VND) : max;
+
+      return { min, max, currency, minUSD, maxUSD };
+    }
+
+    function normalizeMode(s) {
+      if (!s) return '';
+      if (/remote/i.test(s)) return 'remote';
+      if (/hybrid/i.test(s)) return 'hybrid';
+      if (/office/i.test(s)) return 'office';
+      return '';
+    }
+
+    // Parse "Posted 8 minutes ago" → absolute Date, dùng scrapedAt làm gốc
+    // (lúc scrape "now" của TopDev = scrapedAt). Fallback: Date.now().
+    const MS_PER_UNIT = {
+      minute: 60e3, hour: 3600e3, day: 86400e3,
+      week: 604800e3, month: 2592000e3, year: 31536000e3,
+    };
+    function parsePostedAt(postedTime, scrapedAt) {
+      if (!postedTime) return null;
+      const m = postedTime.match(/(\d+)\s*(minute|hour|day|week|month|year)s?\s*ago/i);
+      if (!m) return null;
+      const delta = parseInt(m[1]) * (MS_PER_UNIT[m[2].toLowerCase()] || 0);
+      const base = scrapedAt ? new Date(scrapedAt).getTime() : Date.now();
+      const t = base - delta;
+      return isNaN(t) ? null : new Date(t);
+    }
+
+    function fmtDateTime(d) {
+      if (!d) return '';
+      const pad = n => String(n).padStart(2, '0');
+      return `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
+
+    // Minutes elapsed since posted, tính từ "now" để freshness phản ánh thực tế
+    function postedAgeMin(job) {
+      const d = parsePostedAt(job.postedTime, job.scrapedAt);
+      return d ? (Date.now() - d.getTime()) / 60000 : Infinity;
+    }
+
+    // Sort rank: lower = more recent (Unknown → Infinity).
+    function postedRank(job) {
+      const d = parsePostedAt(job.postedTime, job.scrapedAt);
+      return d ? -d.getTime() : Infinity;
+    }
+
+    function topN(items, getter, n) {
+      const counts = new Map();
+      for (const item of items) {
+        const vals = getter(item);
+        const arr = Array.isArray(vals) ? vals : [vals];
+        for (const v of arr) {
+          if (!v) continue;
+          counts.set(v, (counts.get(v) || 0) + 1);
+        }
+      }
+      return [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, n);
+    }
+
+    function esc(s) {
+      return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    }
+
+    function fmtUSD(n) { return n.toLocaleString('en-US'); }
+
+    function relativeFrom(date) {
+      if (!date) return '';
+      const minutes = (Date.now() - date.getTime()) / 60000;
+      if (minutes < 1) return 'vừa xong';
+      if (minutes < 60) return `${Math.round(minutes)} phút trước`;
+      const hours = minutes / 60;
+      if (hours < 24) return `${Math.round(hours)} giờ trước`;
+      const days = hours / 24;
+      if (days < 30) return `${Math.round(days)} ngày trước`;
+      const months = days / 30;
+      if (months < 12) return `${Math.round(months)} tháng trước`;
+      return `${Math.round(months / 12)} năm trước`;
+    }
+
+    // ============ filter + sort ============
+    function filtered() {
+      const { q, location, mode, quick, skill, company } = state.filter;
+      const qLower = q.toLowerCase();
+      return state.jobs.filter(j => {
+        if (qLower) {
+          const hay = `${j.title} ${j.company} ${(j.skills || j.tags || []).join(' ')}`.toLowerCase();
+          if (!hay.includes(qLower)) return false;
+        }
+        if (location && j.location !== location) return false;
+        if (mode && normalizeMode(j.workingMode) !== mode) return false;
+        if (quick === 'salary' && !parseSalary(j.salary)) return false;
+        if (quick === 'hot' && !/hot/i.test(j.label || '')) return false;
+        if (skill && !(j.skills || j.tags || []).includes(skill)) return false;
+        if (company && j.company !== company) return false;
+        return true;
+      });
+    }
+
+    function sorted(list) {
+      const c = [...list];
+      if (state.sort === 'posted') {
+        c.sort((a, b) => postedRank(a) - postedRank(b));
+      } else if (state.sort === 'salary') {
+        c.sort((a, b) => {
+          const sa = parseSalary(a.salary), sb = parseSalary(b.salary);
+          return (sb?.maxUSD ?? -1) - (sa?.maxUSD ?? -1);
+        });
+      } else if (state.sort === 'title') {
+        c.sort((a, b) => (a.title || '').localeCompare(b.title || ''));
+      }
+      return c;
+    }
+
+    // ============ render ============
+    function renderStats() {
+      const jobs = state.jobs;
+      const companies = new Set(jobs.map(j => j.company).filter(Boolean));
+      const locations = new Set(jobs.map(j => j.location).filter(Boolean));
+      const withSal = jobs.map(j => parseSalary(j.salary)).filter(Boolean);
+      const usdCount = withSal.filter(s => s.currency === 'USD').length;
+      const vndCount = withSal.filter(s => s.currency === 'VND').length;
+      const avgMaxUSD = withSal.length ? Math.round(withSal.reduce((a, s) => a + s.maxUSD, 0) / withSal.length) : null;
+      const hot = jobs.filter(j => /hot/i.test(j.label || '')).length;
+
+      // Crawl time: lấy scrapedAt mới nhất trong jobs
+      const scrapedTimes = jobs.map(j => j.scrapedAt ? new Date(j.scrapedAt) : null).filter(Boolean);
+      const latestScrape = scrapedTimes.length
+        ? scrapedTimes.reduce((a, b) => a > b ? a : b)
+        : null;
+
+      const cards = [
+        { label: 'Total jobs', value: jobs.length },
+        { label: 'Companies', value: companies.size },
+        { label: 'Locations', value: locations.size },
+        { label: 'With salary', value: withSal.length, sub: jobs.length ? `${Math.round(withSal.length / jobs.length * 100)}% · USD:${usdCount} VND:${vndCount}` : '' },
+        { label: 'Avg max salary', value: avgMaxUSD ? `$${fmtUSD(avgMaxUSD)}` : '—', sub: avgMaxUSD ? 'USD-equiv' : '' },
+        { label: 'HOT', value: hot },
+        {
+          label: 'Last crawl',
+          value: latestScrape ? fmtDateTime(latestScrape) : '—',
+          sub: latestScrape ? relativeFrom(latestScrape) : '',
+        },
+        {
+          label: 'USD → VND',
+          value: fmtUSD(Math.round(usdVndRate)),
+          sub: `${rateSource}${rateFetchedAt ? ' · ' + rateFetchedAt.toISOString().slice(0, 10) : ''}`,
+        },
+      ];
+      document.getElementById('stats').innerHTML = cards.map(c =>
+        `<div class="stat"><div class="stat-label">${esc(c.label)}</div><div class="stat-value">${esc(c.value)}</div>${c.sub ? `<div class="stat-sub">${esc(c.sub)}</div>` : ''}</div>`
+      ).join('');
+    }
+
+    function renderFilterOptions() {
+      const locs = [...new Set(state.jobs.map(j => j.location).filter(Boolean))].sort();
+      document.getElementById('f-location').innerHTML =
+        '<option value="">All locations</option>' +
+        locs.map(l => `<option value="${esc(l)}">${esc(l)}</option>`).join('');
+    }
+
+    function renderCharts() {
+      const list = filtered();
+      const skills = topN(list, j => j.skills || j.tags || [], 15);
+      const companies = topN(list, j => j.company, 10);
+      const modes = topN(list, j => normalizeMode(j.workingMode), 5);
+
+      const bar = (items, key, current) => {
+        if (!items.length) return '<div class="muted" style="font-size:13px">Không có data</div>';
+        const max = items[0][1];
+        return items.map(([name, count]) => `
+          <div class="bar-row ${current === name ? 'active' : ''}" data-filter="${esc(key)}" data-value="${esc(name)}" title="${esc(name)}">
+            <span class="name">${esc(name)}</span>
+            <span class="bar"><span style="width:${(count / max * 100).toFixed(1)}%"></span></span>
+            <span class="count">${count}</span>
+          </div>
+        `).join('');
+      };
+      document.getElementById('chart-skills').innerHTML = bar(skills, 'skill', state.filter.skill);
+      document.getElementById('chart-companies').innerHTML = bar(companies, 'company', state.filter.company);
+      document.getElementById('chart-modes').innerHTML = bar(modes, 'mode', state.filter.mode);
+    }
+
+    function renderList() {
+      const list = sorted(filtered());
+      state._visibleList = list;
+      document.getElementById('count').textContent = `${list.length} job${list.length !== 1 ? 's' : ''}`;
+
+      const start = (state.page - 1) * PAGE_SIZE;
+      const pageJobs = list.slice(start, start + PAGE_SIZE);
+
+      const html = pageJobs.map((j, i) => {
+        const sal = parseSalary(j.salary);
+        const hasLabel = j.label && j.label.trim();
+        const postedAt = parsePostedAt(j.postedTime, j.scrapedAt);
+        const postedStr = postedAt ? fmtDateTime(postedAt) : (j.postedTime || '');
+        return `
+          <div class="job-card" data-idx="${start + i}">
+            <div class="job-title">${esc(j.title || '(no title)')}</div>
+            <div class="job-company">${esc(j.company || '—')}</div>
+            <div class="job-meta">
+              <span>${esc(j.location || '—')}</span>
+              <span>·</span>
+              <span>${esc(j.workingMode || '—')}</span>
+              <span>·</span>
+              <span title="${esc(j.postedTime || '')}">${esc(postedStr)}</span>
+              ${hasLabel ? `<span class="badge hot">${esc(j.label)}</span>` : ''}
+              ${sal ? `<span class="badge salary">${esc(j.salary)}</span>` :
+                j.salary && !/sign in/i.test(j.salary) ? `<span class="muted">${esc(j.salary)}</span>` : ''}
+            </div>
+            <div class="job-tags">
+              ${(j.skills || j.tags || []).slice(0, 10).map(s => `<span class="tag skill">${esc(s)}</span>`).join('')}
+            </div>
+          </div>
+        `;
+      }).join('') || '<div class="empty">Không có kết quả. Thử bỏ bớt filter.</div>';
+      document.getElementById('job-list').innerHTML = html;
+
+      renderPagination(list.length);
+    }
+
+    function renderPagination(total) {
+      const pages = Math.ceil(total / PAGE_SIZE);
+      const cur = state.page;
+      if (pages <= 1) { document.getElementById('pagination').innerHTML = ''; return; }
+      const btn = (p, label = p, extra = '') => `<button data-page="${p}" ${extra}>${label}</button>`;
+      let html = btn(Math.max(1, cur - 1), '‹', cur === 1 ? 'disabled' : '');
+      const win = 2;
+      const from = Math.max(1, cur - win);
+      const to = Math.min(pages, cur + win);
+      if (from > 1) {
+        html += btn(1, '1');
+        if (from > 2) html += '<span>…</span>';
+      }
+      for (let p = from; p <= to; p++) {
+        html += `<button data-page="${p}" class="${p === cur ? 'active' : ''}">${p}</button>`;
+      }
+      if (to < pages) {
+        if (to < pages - 1) html += '<span>…</span>';
+        html += btn(pages, pages);
+      }
+      html += btn(Math.min(pages, cur + 1), '›', cur === pages ? 'disabled' : '');
+      document.getElementById('pagination').innerHTML = html;
+    }
+
+    function renderAll() {
+      renderCharts();
+      renderReport();
+      renderList();
+    }
+
+    // ============ report ============
+    // Salary buckets với bước nhảy $500, từ $0 đến $5k + overflow ≥$5k (11 buckets).
+    // label = nhãn dài (cho markdown), short = nhãn ngắn (cho column chart X-axis).
+    const SALARY_BUCKETS = (() => {
+      const step = 500, cap = 5000, arr = [];
+      const fmt = n => n < 1000 ? `${n}` : (n % 1000 === 0 ? `${n / 1000}k` : `${(n / 1000).toFixed(1)}k`);
+      for (let lo = 0; lo < cap; lo += step) {
+        const hi = lo + step;
+        arr.push({
+          label: `$${fmt(lo)} – $${fmt(hi)}`,
+          short: `$${fmt(lo)}`,
+          min: lo,
+          max: hi,
+        });
+      }
+      arr.push({ label: `≥ $${fmt(cap)}`, short: `$${fmt(cap)}+`, min: cap, max: Infinity });
+      return arr;
+    })();
+    const FRESH_BUCKETS = [
+      { label: 'Today (< 24h)',  maxMin: 1440 },
+      { label: 'This week',      maxMin: 10080 },
+      { label: 'This month',     maxMin: 43200 },
+      { label: 'Older',          maxMin: Infinity },
+      { label: 'Unknown',        maxMin: null },
+    ];
+
+    function buildReportData() {
+      const list = filtered();
+      const total = list.length;
+
+      // Salary — mọi số đã normalize về USD qua parseSalary.maxUSD/minUSD
+      const salaries = list.map(j => parseSalary(j.salary)).filter(Boolean);
+      const maxes = salaries.map(s => s.maxUSD).sort((a, b) => a - b);
+      const mins = salaries.map(s => s.minUSD).sort((a, b) => a - b);
+      const median = maxes.length
+        ? (maxes.length % 2
+          ? maxes[(maxes.length - 1) / 2]
+          : Math.round((maxes[maxes.length / 2 - 1] + maxes[maxes.length / 2]) / 2))
+        : null;
+      const avg = maxes.length ? Math.round(maxes.reduce((a, b) => a + b, 0) / maxes.length) : null;
+      const salBuckets = SALARY_BUCKETS.map(b => ({
+        ...b,
+        count: salaries.filter(s => s.maxUSD >= b.min && s.maxUSD < b.max).length,
+      }));
+      const usdCount = salaries.filter(s => s.currency === 'USD').length;
+      const vndCount = salaries.filter(s => s.currency === 'VND').length;
+
+      // Skills/locations/companies/modes
+      const topSkills = topN(list, j => j.skills || j.tags || [], 10);
+      const topLocations = topN(list, j => j.location, 8);
+      const topCompanies = topN(list, j => j.company, 8);
+      const modes = topN(list, j => normalizeMode(j.workingMode), 5);
+
+      // Freshness — tính age tại "now" (khi xem dashboard), không phải lúc scrape
+      const freshCounts = new Map(FRESH_BUCKETS.map(b => [b.label, 0]));
+      for (const j of list) {
+        const age = postedAgeMin(j);
+        if (age === Infinity) freshCounts.set('Unknown', freshCounts.get('Unknown') + 1);
+        else {
+          for (const b of FRESH_BUCKETS) {
+            if (b.maxMin !== null && age < b.maxMin) {
+              freshCounts.set(b.label, freshCounts.get(b.label) + 1);
+              break;
+            }
+          }
+        }
+      }
+      const fresh = [...freshCounts.entries()].filter(([, c]) => c > 0);
+
+      // HOT
+      const hotCount = list.filter(j => /hot/i.test(j.label || '')).length;
+
+      return {
+        total,
+        salary: {
+          count: salaries.length,
+          pct: total ? Math.round(salaries.length / total * 100) : 0,
+          min: mins[0] ?? null,
+          max: maxes[maxes.length - 1] ?? null,
+          median,
+          avg,
+          buckets: salBuckets,
+          usdCount,
+          vndCount,
+        },
+        topSkills, topLocations, topCompanies, modes, fresh, hotCount,
+      };
+    }
+
+    function renderReport() {
+      const d = buildReportData();
+      const total = d.total;
+      if (!total) {
+        document.getElementById('rep-meta').textContent = '0 jobs';
+        document.getElementById('report-body').innerHTML = '<div class="muted" style="padding: 8px 0">Không có job nào trong filter hiện tại.</div>';
+        return;
+      }
+
+      const hasFilter = state.filter.q || state.filter.location || state.filter.mode || state.filter.quick || state.filter.skill || state.filter.company;
+      document.getElementById('rep-meta').textContent =
+        hasFilter ? `${total} jobs · filtered` : `${total} jobs · all`;
+
+      // Narrative line
+      const topSkill = d.topSkills[0];
+      const topLoc = d.topLocations[0];
+      const topMode = d.modes[0];
+      const narrative = [
+        `<b>${total}</b> jobs`,
+        d.salary.count ? `<b>${d.salary.count}</b> (${d.salary.pct}%) có salary parseable, trung vị <b>$${fmtUSD(d.salary.median)}</b> USD-equiv (${d.salary.usdCount} USD + ${d.salary.vndCount} VND)` : null,
+        topSkill ? `top skill <b>${esc(topSkill[0])}</b> (${topSkill[1]})` : null,
+        topLoc ? `chủ yếu ở <b>${esc(topLoc[0])}</b> (${topLoc[1]})` : null,
+        topMode ? `working mode phổ biến: <b>${esc(topMode[0])}</b> (${topMode[1]})` : null,
+        d.hotCount ? `<b>${d.hotCount}</b> HOT` : null,
+      ].filter(Boolean).join(', ') + '.';
+
+      // Salary section
+      let salaryHtml;
+      if (d.salary.count) {
+        const maxCount = Math.max(...d.salary.buckets.map(b => b.count), 1);
+        const chart = d.salary.buckets.map(b => {
+          const h = b.count ? (b.count / maxCount * 100).toFixed(1) : 0;
+          return `
+            <div class="col" title="${esc(b.label)}: ${b.count} job${b.count !== 1 ? 's' : ''}">
+              <span class="count">${b.count || ''}</span>
+              <div class="col-bar"><div class="bar" style="height:${h}%"></div></div>
+              <span class="label">${esc(b.short)}</span>
+            </div>
+          `;
+        }).join('');
+        salaryHtml = `
+          <div class="rep-section span-2">
+            <h4>Salary insights <span class="muted" style="font-weight:normal;text-transform:none;letter-spacing:0">(normalized to USD-equiv, ${fmtUSD(Math.round(usdVndRate))} VND = $1 · ${rateSource})</span></h4>
+            <div class="rep-stats">
+              <div class="rep-stat"><span class="rep-stat-label">Parseable</span><span class="rep-stat-value">${d.salary.count} / ${total}</span><span class="muted" style="font-size:11px">USD:${d.salary.usdCount} · VND:${d.salary.vndCount}</span></div>
+              <div class="rep-stat"><span class="rep-stat-label">Min</span><span class="rep-stat-value">$${fmtUSD(d.salary.min)}</span></div>
+              <div class="rep-stat"><span class="rep-stat-label">Median (max)</span><span class="rep-stat-value">$${fmtUSD(d.salary.median)}</span></div>
+              <div class="rep-stat"><span class="rep-stat-label">Mean (max)</span><span class="rep-stat-value">$${fmtUSD(d.salary.avg)}</span></div>
+              <div class="rep-stat"><span class="rep-stat-label">Max</span><span class="rep-stat-value">$${fmtUSD(d.salary.max)}</span></div>
+            </div>
+            <div class="salary-chart">${chart}</div>
+          </div>
+        `;
+      } else {
+        salaryHtml = `
+          <div class="rep-section span-2">
+            <h4>Salary insights</h4>
+            <p class="muted">Không có salary parseable trong filter này. Đảm bảo đã login (xem cookies) hoặc bỏ filter.</p>
+          </div>
+        `;
+      }
+
+      // Freshness section
+      const freshMax = Math.max(...d.fresh.map(([, c]) => c), 1);
+      const freshHtml = d.fresh.length ? `
+        <div class="rep-section">
+          <h4>Posted freshness</h4>
+          <div>${d.fresh.map(([label, count]) => `
+            <div class="bar-row">
+              <span class="name">${esc(label)}</span>
+              <span class="bar"><span style="width:${(count / freshMax * 100).toFixed(1)}%"></span></span>
+              <span class="count">${count}</span>
+            </div>
+          `).join('')}</div>
+        </div>
+      ` : '';
+
+      // Location section
+      const locMax = Math.max(...d.topLocations.map(([, c]) => c), 1);
+      const locHtml = d.topLocations.length ? `
+        <div class="rep-section">
+          <h4>Top locations</h4>
+          <div>${d.topLocations.map(([name, count]) => `
+            <div class="bar-row">
+              <span class="name">${esc(name)}</span>
+              <span class="bar"><span style="width:${(count / locMax * 100).toFixed(1)}%"></span></span>
+              <span class="count">${count} · ${Math.round(count / total * 100)}%</span>
+            </div>
+          `).join('')}</div>
+        </div>
+      ` : '';
+
+      document.getElementById('report-body').innerHTML = `
+        <p class="rep-narrative">${narrative}</p>
+        <div class="report-grid">
+          ${salaryHtml}
+          ${locHtml}
+          ${freshHtml}
+        </div>
+      `;
+    }
+
+    function reportMarkdown() {
+      const d = buildReportData();
+      if (!d.total) return '# TopDev Jobs Report\n\n_No jobs in current filter._\n';
+
+      const today = new Date().toISOString().slice(0, 10);
+      const filterLabel = (() => {
+        const f = state.filter;
+        const parts = [];
+        if (f.q) parts.push(`search="${f.q}"`);
+        if (f.location) parts.push(`location=${f.location}`);
+        if (f.mode) parts.push(`mode=${f.mode}`);
+        if (f.quick) parts.push(`quick=${f.quick}`);
+        if (f.skill) parts.push(`skill=${f.skill}`);
+        if (f.company) parts.push(`company=${f.company}`);
+        return parts.length ? parts.join(', ') : 'none';
+      })();
+
+      const lines = [];
+      lines.push(`# TopDev Jobs Report`);
+      lines.push(`_Generated ${today} · ${d.total} jobs · filters: ${filterLabel}_`);
+      lines.push('');
+
+      // Salary
+      lines.push(`## Salary`);
+      lines.push(`_All figures normalized to USD-equivalent (${fmtUSD(Math.round(usdVndRate))} VND = $1, source: ${rateSource}${rateFetchedAt ? ' @ ' + rateFetchedAt.toISOString().slice(0, 16) : ''})._`);
+      if (d.salary.count) {
+        lines.push(`- **${d.salary.count} / ${d.total}** jobs có salary parseable (${d.salary.pct}%) — USD: ${d.salary.usdCount}, VND: ${d.salary.vndCount}`);
+        lines.push(`- Range: $${fmtUSD(d.salary.min)} – $${fmtUSD(d.salary.max)}`);
+        lines.push(`- Median (max): **$${fmtUSD(d.salary.median)}** | Mean (max): $${fmtUSD(d.salary.avg)}`);
+        lines.push('');
+        lines.push(`### Distribution`);
+        for (const b of d.salary.buckets) {
+          lines.push(`- ${b.label}: ${b.count}`);
+        }
+      } else {
+        lines.push(`_Không có salary parseable trong filter này._`);
+      }
+      lines.push('');
+
+      // Top skills
+      lines.push(`## Top skills`);
+      for (const [name, count] of d.topSkills) {
+        lines.push(`- ${name} (${count}, ${Math.round(count / d.total * 100)}%)`);
+      }
+      lines.push('');
+
+      // Top companies
+      lines.push(`## Top companies`);
+      for (const [name, count] of d.topCompanies) {
+        lines.push(`- ${name} (${count})`);
+      }
+      lines.push('');
+
+      // Locations
+      lines.push(`## Locations`);
+      for (const [name, count] of d.topLocations) {
+        lines.push(`- ${name}: ${count} (${Math.round(count / d.total * 100)}%)`);
+      }
+      lines.push('');
+
+      // Working mode
+      lines.push(`## Working mode`);
+      for (const [name, count] of d.modes) {
+        lines.push(`- ${name}: ${count} (${Math.round(count / d.total * 100)}%)`);
+      }
+      lines.push('');
+
+      // Freshness
+      lines.push(`## Posted freshness`);
+      for (const [label, count] of d.fresh) {
+        lines.push(`- ${label}: ${count}`);
+      }
+      lines.push('');
+
+      if (d.hotCount) lines.push(`**HOT / SUPER HOT:** ${d.hotCount} job(s)`);
+
+      return lines.join('\n');
+    }
+
+    // ============ modal ============
+    function openModal(idx) {
+      const j = state._visibleList[idx];
+      if (!j) return;
+      const sal = parseSalary(j.salary);
+      const company = j.companyInfo || {};
+      const postedAt = parsePostedAt(j.postedTime, j.scrapedAt);
+      const postedStr = postedAt ? fmtDateTime(postedAt) : (j.postedTime || '');
+      const section = (title, body) => body ? `<div><h4>${esc(title)}</h4><pre>${esc(body)}</pre></div>` : '';
+      const companyRows = Object.entries(company)
+        .filter(([k]) => k !== 'name')
+        .map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`)
+        .join('');
+
+      document.getElementById('modal').innerHTML = `
+        <button class="close" id="modal-close" aria-label="Close">×</button>
+        <h2>${esc(j.title || '')}</h2>
+        <div class="muted">
+          ${esc(j.company || '')} · ${esc(j.location || '—')} · ${esc(j.workingMode || '—')} · <span title="${esc(j.postedTime || '')}">${esc(postedStr)}</span>
+        </div>
+        <div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          ${j.label ? `<span class="badge hot">${esc(j.label)}</span>` : ''}
+          ${sal ? `<span class="badge salary">${esc(j.salary)}</span>` :
+            j.salary ? `<span class="muted">${esc(j.salary)}</span>` : ''}
+        </div>
+        ${j.url ? `<div style="margin-top:12px"><a href="${esc(j.url)}" target="_blank" rel="noopener">Xem trên TopDev →</a></div>` : ''}
+        ${(j.skills || j.tags || []).length ? `<div class="job-tags" style="margin-top:12px">${(j.skills || j.tags).map(s => `<span class="tag skill">${esc(s)}</span>`).join('')}</div>` : ''}
+        ${section('Top reasons to join', j.reasons)}
+        ${section('Job description', j.jobDescription)}
+        ${section('Requirements', j.requirements)}
+        ${section("Why you'll love working here", j.benefits)}
+        ${companyRows ? `<div><h4>Company info</h4><dl class="company-grid">${companyRows}</dl></div>` : ''}
+      `;
+      document.getElementById('modal-backdrop').classList.add('show');
+      document.getElementById('modal-close').onclick = closeModal;
+    }
+    function closeModal() {
+      document.getElementById('modal-backdrop').classList.remove('show');
+    }
+
+    // ============ events ============
+    let qTimer;
+    document.getElementById('q').addEventListener('input', e => {
+      clearTimeout(qTimer);
+      qTimer = setTimeout(() => {
+        state.filter.q = e.target.value;
+        state.page = 1;
+        renderAll();
+      }, 150);
+    });
+    document.getElementById('f-location').addEventListener('change', e => {
+      state.filter.location = e.target.value; state.page = 1; renderAll();
+    });
+    document.getElementById('f-mode').addEventListener('change', e => {
+      state.filter.mode = e.target.value; state.page = 1; renderAll();
+    });
+    document.getElementById('f-quick').addEventListener('change', e => {
+      state.filter.quick = e.target.value; state.page = 1; renderAll();
+    });
+    document.getElementById('btn-clear').addEventListener('click', () => {
+      state.filter = { q: '', location: '', mode: '', quick: '', skill: '', company: '' };
+      state.page = 1;
+      document.getElementById('q').value = '';
+      document.getElementById('f-location').value = '';
+      document.getElementById('f-mode').value = '';
+      document.getElementById('f-quick').value = '';
+      renderAll();
+    });
+    document.querySelectorAll('.sort-bar button').forEach(b => {
+      b.addEventListener('click', () => {
+        state.sort = b.dataset.sort;
+        document.querySelectorAll('.sort-bar button').forEach(x => x.classList.toggle('active', x === b));
+        renderList();
+      });
+    });
+    document.getElementById('job-list').addEventListener('click', e => {
+      const card = e.target.closest('.job-card');
+      if (card) openModal(parseInt(card.dataset.idx));
+    });
+    // Chart click → toggle filter
+    document.querySelector('aside').addEventListener('click', e => {
+      const row = e.target.closest('.bar-row');
+      if (!row) return;
+      const key = row.dataset.filter;
+      const val = row.dataset.value;
+      state.filter[key] = state.filter[key] === val ? '' : val;
+      if (key === 'mode') document.getElementById('f-mode').value = state.filter.mode;
+      state.page = 1;
+      renderAll();
+    });
+    document.getElementById('pagination').addEventListener('click', e => {
+      const b = e.target.closest('button[data-page]');
+      if (b && !b.disabled) {
+        state.page = parseInt(b.dataset.page);
+        renderList();
+        document.getElementById('main').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    });
+    document.getElementById('modal-backdrop').addEventListener('click', e => {
+      if (e.target.id === 'modal-backdrop') closeModal();
+    });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+    document.getElementById('rep-copy').addEventListener('click', async e => {
+      e.preventDefault();
+      e.stopPropagation();
+      const md = reportMarkdown();
+      const btn = e.currentTarget;
+      try {
+        await navigator.clipboard.writeText(md);
+        btn.textContent = 'Copied ✓';
+        btn.classList.add('ok');
+      } catch {
+        // Fallback: open in a new tab as text
+        const w = window.open('', '_blank');
+        if (w) { w.document.body.innerText = md; btn.textContent = 'Opened tab'; }
+        else btn.textContent = 'Copy failed';
+      }
+      setTimeout(() => { btn.textContent = 'Copy as Markdown'; btn.classList.remove('ok'); }, 1600);
+    });
+
+    document.getElementById('file-input').addEventListener('change', e => {
+      const f = e.target.files[0];
+      if (!f) return;
+      f.text().then(t => {
+        const data = JSON.parse(t);
+        if (!Array.isArray(data)) throw new Error('JSON không phải array');
+        loadData(data, `${f.name} · ${data.length} jobs`);
+      }).catch(err => alert('Parse fail: ' + err.message));
+    });
+
+    // ============ boot ============
+    function loadData(jobs, sourceLabel) {
+      state.jobs = jobs;
+      document.getElementById('source-info').textContent = sourceLabel;
+      document.getElementById('loader').hidden = true;
+      document.getElementById('empty').hidden = true;
+      document.getElementById('stats').hidden = false;
+      document.getElementById('report').hidden = false;
+      document.getElementById('filters').hidden = false;
+      document.getElementById('main').hidden = false;
+      renderStats();
+      renderFilterOptions();
+      renderAll();
+    }
+
+    (async () => {
+      // Chạy song song: rate fetch + data fetch (cả 2 độc lập, tiết kiệm ~200ms)
+      const [_, dataResult] = await Promise.allSettled([
+        loadRate(),
+        fetch('topdev-jobs.json')
+          .then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }),
+      ]);
+      if (dataResult.status === 'fulfilled') {
+        loadData(dataResult.value, `topdev-jobs.json · ${dataResult.value.length} jobs`);
+      } else {
+        document.getElementById('loader').hidden = true;
+        document.getElementById('empty').hidden = false;
+      }
+    })();
+  </script>
+</body>
+</html>

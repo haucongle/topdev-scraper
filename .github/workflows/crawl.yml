@@ -1,0 +1,80 @@
+name: Crawl TopDev jobs
+
+on:
+  # 00:15 UTC = 07:15 ICT — lệch 15 phút so với ITviec để không chạy cùng lúc
+  schedule:
+    - cron: '15 0 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: crawl
+  cancel-in-progress: false
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60  # TopDev CSR render chậm hơn → buffer lớn hơn
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - run: npm ci
+
+      - name: Install Playwright Chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Inject login cookies
+        env:
+          COOKIES_RAW: ${{ secrets.TOPDEV_COOKIES_RAW }}
+        run: |
+          if [ -n "$COOKIES_RAW" ]; then
+            printf '%s' "$COOKIES_RAW" > cookies-raw.txt
+            node build-cookies.js
+            echo "✓ Cookies loaded"
+          else
+            echo "⚠ No TOPDEV_COOKIES_RAW secret — scraping không login."
+          fi
+
+      - name: Ensure fresh state
+        run: rm -f topdev-state.json
+
+      - name: Crawl
+        run: node scraper.js
+
+      - name: Commit updated jobs.json
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if [ -n "$(git status --porcelain topdev-jobs.json)" ]; then
+            git add topdev-jobs.json
+            git commit -m "chore: crawl $(date -u +%Y-%m-%d) [skip ci]"
+            for i in 1 2 3; do
+              git pull --rebase origin main && git push && { echo "✓ Pushed (attempt $i)"; exit 0; }
+              echo "Attempt $i failed, retry in 5s..."
+              sleep 5
+            done
+            echo "::error::Failed to push after 3 attempts"
+            exit 1
+          else
+            echo "No changes in topdev-jobs.json, nothing to commit."
+          fi
+
+      - name: Upload state file on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-debug-${{ github.run_id }}
+          path: |
+            topdev-state.json
+            topdev-jobs.json
+            debug-page1.html
+          if-no-files-found: ignore
+          retention-days: 7

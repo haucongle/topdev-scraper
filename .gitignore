@@ -1,0 +1,25 @@
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Scraper output & state
+topdev-state.json
+topdev-cookies.json
+cookies-raw.txt
+debug-*.html
+debug-*.json
+*.log
+
+# Env & secrets
+.env
+.env.*
+!.env.example
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
