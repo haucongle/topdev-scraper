@@ -6,7 +6,6 @@ yarn-error.log*
 # Scraper output & state
 topdev-state.json
 topdev-cookies.json
-cookies-raw.txt
 debug-*.html
 debug-*.json
 *.log

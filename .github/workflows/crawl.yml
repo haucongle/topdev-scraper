@@ -32,18 +32,6 @@ jobs:
       - name: Install Playwright Chromium
         run: npx playwright install chromium --with-deps
 
-      - name: Inject login cookies
-        env:
-          COOKIES_RAW: ${{ secrets.TOPDEV_COOKIES_RAW }}
-        run: |
-          if [ -n "$COOKIES_RAW" ]; then
-            printf '%s' "$COOKIES_RAW" > cookies-raw.txt
-            node build-cookies.js
-            echo "✓ Cookies loaded"
-          else
-            echo "⚠ No TOPDEV_COOKIES_RAW secret"
-          fi
-
       - name: Ensure fresh state
         run: rm -f topdev-state.json
 
@@ -67,7 +55,6 @@ jobs:
           path: |
             topdev-state.json
             topdev-jobs.json
-            debug-page1.html
           if-no-files-found: ignore
           retention-days: 7
 

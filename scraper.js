@@ -1,118 +1,170 @@
 import { chromium } from 'playwright-extra';
 import stealth from 'puppeteer-extra-plugin-stealth';
-import * as cheerio from 'cheerio';
 import fs from 'fs';
-import pLimit from 'p-limit';
 
 chromium.use(stealth());
 
 const CONFIG = {
-  baseUrl: 'https://topdev.vn/viec-lam-it',
+  // TopDev serves job list via backend API. The website (Next.js CSR) calls this
+  // same endpoint internally — calling it directly is faster and gives us the
+  // full job detail (content, requirements, benefits) in the list response,
+  // so we don't need a separate detail-fetch phase.
+  apiBase: 'https://api.topdev.vn/td/v2/jobs/search/v2',
+  apiFields: {
+    job: 'id,title,salary,slug,company,expires,extra_skills,skills_str,skills_arr,skills_ids,job_types_str,job_levels_str,job_levels_arr,job_levels_ids,addresses,status_display,detail_url,job_url,salary,published,refreshed,applied,candidate,requirements_arr,packages,benefits,content,features,contract_types_ids,is_free,is_basic,is_basic_plus,is_distinction,level,contract_types_str,experiences_str,benefits_v2,services,job_category_id,responsibilities_original,requirements_original,benefits_original',
+    company: 'tagline,addresses,skills_arr,industries_arr,industries_ids,industries_str,image_cover,image_galleries,num_job_openings,company_size,nationalities_str,skills_str,skills_ids,benefits,num_employees',
+  },
+  locale: 'vi_VN',
+  referer: 'https://topdev.vn/jobs/search',
+
   maxPages: null,
   outputFile: 'topdev-jobs.json',
   cookiesFile: 'topdev-cookies.json',
   stateFile: 'topdev-state.json',
   headless: true,
-  detailConcurrency: 2,
   saveEvery: 5,
-  // TopDev dùng Next.js CSR; cần chờ render xong trước khi parse.
-  renderWaitMs: 2500,
-  // Scroll-to-bottom để trigger lazy load (nếu page có infinite scroll).
-  scrollToBottom: true,
+  pageDelayMs: [800, 2000],
 };
 
-const STATE_VERSION = 1;
+const STATE_VERSION = 2;
 
 const sleep = (min, max = min) => new Promise(r =>
   setTimeout(r, min + Math.random() * (max - min))
 );
 
-// ============ PARSE HTML FUNCTIONS ============
-//
-// ⚠️ TODO — selectors dưới đây là placeholder. TopDev structure khác ITviec
-// và chỉ render sau khi JS load. Sau lần chạy đầu, inspect debug-page1.html
-// (tự động dump) để tìm:
-//   - Container của từng job card (vd: article, li, div[class*="job"])
-//   - Selector cho title, company, salary, location, tags, link detail
-//   - URL pattern của detail page (/viec-lam/<slug>? /jobs/<id>?)
-// Rồi cập nhật 2 hàm dưới.
+// ============ HTML CLEANUP ============
 
-function parseJobList(html) {
-  const $ = cheerio.load(html);
-  const jobs = [];
+const HTML_ENTITIES = {
+  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'",
+  '&apos;': "'", '&nbsp;': ' ', '&ndash;': '–', '&mdash;': '—',
+  '&hellip;': '…', '&rsquo;': '’', '&lsquo;': '‘', '&rdquo;': '”', '&ldquo;': '“',
+};
 
-  // TODO: thay selector sau khi inspect
-  $('[class*="job-card"], [class*="JobCard"], article[class*="job"], li[class*="job"]').each((_, el) => {
-    const $el = $(el);
-
-    // TODO: title + URL
-    const $titleLink = $el.find('a[href*="/viec-lam"], a[href*="/jobs"], a[href*="/job"]').first();
-    const href = $titleLink.attr('href') || '';
-    const title = $titleLink.text().trim() || $el.find('h3, h2').first().text().trim();
-    if (!title || !href) return;
-
-    const url = href.startsWith('http') ? href : 'https://topdev.vn' + href;
-    const slug = (url.match(/\/(?:viec-lam|jobs|job)\/([^/?#]+)/) || [])[1] || '';
-
-    // TODO: các field còn lại
-    const company = $el.find('[class*="company"], [class*="Company"]').first().text().trim();
-    const salary = $el.find('[class*="salary"], [class*="Salary"]').first().text().replace(/\s+/g, ' ').trim();
-    const location = $el.find('[class*="location"], [class*="Location"]').first().text().trim();
-    const tags = $el.find('[class*="tag"], [class*="Tag"], [class*="skill"], [class*="Skill"]')
-      .map((_, t) => $(t).text().trim()).get()
-      .filter(t => t && t.length < 40);
-
-    jobs.push({
-      slug,
-      title,
-      url,
-      company,
-      salary: salary || '',
-      location,
-      tags,
-    });
-  });
-
-  return jobs;
+function decodeEntities(s) {
+  return s
+    .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
+    .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
+    .replace(/&[a-z]+;/gi, m => HTML_ENTITIES[m.toLowerCase()] ?? m);
 }
 
-function parseJobDetail(html, baseData) {
-  const $ = cheerio.load(html);
-
-  // TODO: adjust sau khi inspect detail page HTML
-  const title = $('h1').first().text().trim() || baseData.title;
-
-  // Section extraction tương tự ITviec — tuỳ DOM TopDev
-  const sectionMap = {};
-  $('h2, h3').each((_, h) => {
-    const heading = $(h).text().trim();
-    if (!heading) return;
-    let sib = $(h).next();
-    const chunks = [];
-    while (sib.length && !/^(H2|H3)$/.test(sib[0].tagName?.toUpperCase() || '')) {
-      const lis = sib.find('li');
-      if (lis.length) {
-        chunks.push(lis.map((_, li) => '- ' + $(li).text().trim().replace(/\s+/g, ' ')).get().join('\n'));
-      } else {
-        const t = sib.text().trim().replace(/\s+/g, ' ');
-        if (t) chunks.push(t);
-      }
-      sib = sib.next();
+// Turn TopDev's rich-text HTML into bullet-list plain text.
+function htmlToText(html) {
+  if (!html || typeof html !== 'string') return '';
+  const items = [];
+  const liMatches = html.match(/<li[^>]*>([\s\S]*?)<\/li>/gi);
+  if (liMatches && liMatches.length) {
+    for (const li of liMatches) {
+      const inner = li.replace(/<li[^>]*>|<\/li>/gi, '');
+      const txt = decodeEntities(inner.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+      if (txt) items.push('- ' + txt);
     }
-    sectionMap[heading] = chunks.join('\n\n').trim();
+    return items.join('\n');
+  }
+  // No <li>: fall back to paragraph-ish split
+  const txt = decodeEntities(html.replace(/<\/?(p|div|br)[^>]*>/gi, '\n').replace(/<[^>]+>/g, ''));
+  return txt.split(/\n+/).map(l => l.replace(/\s+/g, ' ').trim()).filter(Boolean).join('\n');
+}
+
+// ============ API ============
+
+function buildApiUrl(pageNum) {
+  const params = new URLSearchParams();
+  params.set('page', String(pageNum));
+  params.set('fields[job]', CONFIG.apiFields.job);
+  params.set('fields[company]', CONFIG.apiFields.company);
+  params.set('locale', CONFIG.locale);
+  return `${CONFIG.apiBase}?${params.toString()}`;
+}
+
+async function fetchJobsPage(requestCtx, pageNum) {
+  const url = buildApiUrl(pageNum);
+  const res = await requestCtx.get(url, {
+    headers: {
+      Accept: 'application/json',
+      Origin: 'https://topdev.vn',
+      Referer: CONFIG.referer,
+    },
+    timeout: 30000,
   });
+  if (!res.ok()) {
+    throw new Error(`API HTTP ${res.status()} for page ${pageNum}`);
+  }
+  const json = await res.json();
+  if (!json || !Array.isArray(json.data)) {
+    throw new Error(`API response missing data[] for page ${pageNum}`);
+  }
+  return json;
+}
+
+// ============ TRANSFORM ============
+
+function normalizeJob(raw) {
+  const url = raw.detail_url || (raw.slug ? `https://topdev.vn/detail-jobs/${raw.slug}-${raw.id}` : '');
+
+  const salary = raw.salary || {};
+  const salaryStr = salary.is_negotiable === '1' || salary.is_negotiable === 1
+    ? 'Negotiable'
+    : (salary.value || '').replace(/\s+/g, ' ').trim();
+
+  const addr = raw.addresses || {};
+  const locations = Array.isArray(addr.address_region_array) ? addr.address_region_array : [];
+  const streets = Array.isArray(addr.collection_addresses)
+    ? addr.collection_addresses.map(a => a?.street).filter(Boolean)
+    : [];
+
+  const tags = [];
+  if (Array.isArray(raw.skills_arr)) tags.push(...raw.skills_arr.filter(Boolean));
+  if (!tags.length && raw.skills_str) {
+    tags.push(...raw.skills_str.split(/[,;]/).map(s => s.trim()).filter(Boolean));
+  }
+
+  const responsibilities = htmlToText(raw.responsibilities_original || raw.content || '');
+  const requirements = htmlToText(raw.requirements_original || '');
+  const benefitsParts = [];
+  if (Array.isArray(raw.benefits_v2)) {
+    for (const b of raw.benefits_v2) {
+      const piece = htmlToText(b?.description || '');
+      if (piece) benefitsParts.push(b?.name ? `${b.name}:\n${piece}` : piece);
+    }
+  }
+  if (!benefitsParts.length && raw.benefits_original) {
+    benefitsParts.push(htmlToText(raw.benefits_original));
+  }
 
   return {
-    ...baseData,
-    title,
-    jobDescription: sectionMap['Job Description'] || sectionMap['Mô tả công việc'] || '',
-    requirements: sectionMap['Requirements'] || sectionMap['Yêu cầu'] || '',
-    benefits: sectionMap['Benefits'] || sectionMap['Quyền lợi'] || '',
+    id: raw.id,
+    slug: raw.slug || '',
+    title: (raw.title || '').trim(),
+    url,
+    company: raw.company?.display_name || '',
+    companyUrl: raw.company?.detail_url || '',
+    companySize: raw.company?.company_size || '',
+    salary: salaryStr,
+    salaryRange: {
+      min: salary.min_filter ?? null,
+      max: salary.max_filter ?? null,
+      currency: salary.currency || '',
+      unit: salary.unit || '',
+    },
+    locations,
+    addresses: streets,
+    jobTypes: raw.job_types_str || '',
+    jobLevels: raw.job_levels_str || '',
+    experience: raw.experiences_str || '',
+    contractTypes: raw.contract_types_str || '',
+    tags,
+    industries: raw.company?.industries_arr || [],
+    jobDescription: responsibilities,
+    requirements,
+    benefits: benefitsParts.join('\n\n').trim(),
+    published: raw.published || '',
+    refreshed: raw.refreshed || '',
+    expires: raw.expires || '',
     scrapedAt: new Date().toISOString(),
   };
 }
 
-// ============ SCRAPE FLOW ============
+// ============ BROWSER (warm-up for CF cookies) ============
 
 async function setupBrowser() {
   const browser = await chromium.launch({
@@ -139,93 +191,36 @@ async function setupBrowser() {
   return { browser, context };
 }
 
-async function bypassCloudflare(page) {
-  const title = await page.title();
-  if (title.includes('Just a moment') || title.includes('Cloudflare')) {
-    console.log('🛑 Cloudflare challenge, đợi 15s...');
-    await sleep(15000);
-    try {
-      await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 30000 });
-    } catch {
-      console.log('⚠️ Cloudflare challenge chưa qua, tiếp tục...');
-    }
-  }
-}
-
-// Scroll-to-bottom nhiều lần để trigger lazy-load (infinite scroll)
-async function autoScroll(page, maxScrolls = 10) {
-  for (let i = 0; i < maxScrolls; i++) {
-    const prevHeight = await page.evaluate(() => document.body.scrollHeight);
-    await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
-    await sleep(800, 1500);
-    const newHeight = await page.evaluate(() => document.body.scrollHeight);
-    if (newHeight === prevHeight) break; // không còn content mới
-  }
-  // Back to top để detail card hiển thị bình thường
-  await page.evaluate(() => window.scrollTo(0, 0));
-}
-
-async function detectTotalPages(page) {
-  // TODO: TopDev có thể dùng pagination page=N hoặc infinite scroll.
-  // Nếu pagination link → extract max page. Nếu không → return 1 và dùng scroll.
-  const total = await page.evaluate(() => {
-    const links = document.querySelectorAll('a[href*="page="]');
-    let max = 1;
-    for (const link of links) {
-      const m = link.href.match(/page=(\d+)/);
-      if (m) max = Math.max(max, parseInt(m[1]));
-    }
-    return max;
-  });
-  return total;
-}
-
-async function scrapeListPage(page, pageNum) {
-  const url = pageNum > 1 ? `${CONFIG.baseUrl}?page=${pageNum}` : CONFIG.baseUrl;
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-  await bypassCloudflare(page);
-
-  // Chờ JS render (TopDev là Next.js CSR)
-  await sleep(CONFIG.renderWaitMs);
-
-  if (CONFIG.scrollToBottom) {
-    await autoScroll(page);
-  }
-
-  const html = await page.content();
-
-  // Dump page 1 để inspect selectors
-  if (pageNum === 1 && !fs.existsSync('debug-page1.html')) {
-    fs.writeFileSync('debug-page1.html', html);
-    console.log('  💾 Saved debug-page1.html — inspect để tìm selector thật');
-  }
-
-  return parseJobList(html);
-}
-
-async function scrapeJobDetail(context, job) {
+async function warmUp(context) {
   const page = await context.newPage();
   try {
-    await page.goto(job.url, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await bypassCloudflare(page);
-    await sleep(CONFIG.renderWaitMs);
-    const html = await page.content();
-    return parseJobDetail(html, job);
+    await page.goto('https://topdev.vn/jobs/search', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    const title = await page.title();
+    if (title.includes('Just a moment') || title.includes('Cloudflare')) {
+      console.log('🛑 Cloudflare challenge, đợi 15s...');
+      await sleep(15000);
+      try {
+        await page.waitForFunction(() => !document.title.includes('Just a moment'), { timeout: 30000 });
+      } catch {
+        console.log('⚠️ Cloudflare vẫn chưa qua, API call có thể fail');
+      }
+    }
+    await sleep(1500, 2500);
   } finally {
     await page.close();
   }
 }
 
-// ============ STATE / RESUME ============
+// ============ STATE ============
 
 function createInitialState() {
   return {
     version: STATE_VERSION,
-    phase: 'list',
     totalPages: 0,
-    allJobs: [],
+    total: 0,
+    perPage: 0,
     completedPages: [],
-    detailed: {},
+    jobsById: {},
     startedAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   };
@@ -236,7 +231,7 @@ function loadState() {
   try {
     const s = JSON.parse(fs.readFileSync(CONFIG.stateFile, 'utf8'));
     if (s.version !== STATE_VERSION) {
-      console.log(`⚠️ State version mismatch, start fresh`);
+      console.log(`⚠️ State version mismatch (${s.version} vs ${STATE_VERSION}), start fresh`);
       return null;
     }
     return s;
@@ -261,20 +256,10 @@ async function main() {
   let state = loadState();
   const resuming = !!state;
   if (resuming) {
-    const detailDone = Object.keys(state.detailed).length;
-    console.log(`📂 Resuming: phase=${state.phase}, list ${state.completedPages.length}/${state.totalPages || '?'}, detail ${detailDone}/${state.allJobs.length}`);
+    console.log(`📂 Resuming: ${state.completedPages.length}/${state.totalPages || '?'} pages, ${Object.keys(state.jobsById).length} jobs`);
   } else {
     state = createInitialState();
     console.log('🆕 Fresh scrape (no state file)');
-  }
-
-  if (state.phase === 'done') {
-    const finalJobs = Object.values(state.detailed);
-    fs.writeFileSync(CONFIG.outputFile, JSON.stringify(finalJobs, null, 2));
-    console.log(`✅ State done. Re-saved ${finalJobs.length} jobs → ${CONFIG.outputFile}`);
-    console.log(`ℹ️ Delete ${CONFIG.stateFile} to scrape again.`);
-    console.timeEnd('⏱️ Total time');
-    return;
   }
 
   const { browser, context } = await setupBrowser();
@@ -293,110 +278,73 @@ async function main() {
   process.on('SIGINT', () => gracefulExit('SIGINT'));
   process.on('SIGTERM', () => gracefulExit('SIGTERM'));
 
-  const page = await context.newPage();
+  console.log('🏠 Warming up browser (Cloudflare + cookies)...');
+  await warmUp(context);
 
-  if (!resuming) {
-    console.log('🏠 Visiting homepage...');
-    await page.goto('https://topdev.vn/', { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await bypassCloudflare(page);
-    await sleep(2000, 4000);
-  }
-
+  // Probe page 1 to learn totalPages
   if (!state.totalPages) {
-    console.log('📊 Detecting total pages...');
-    await page.goto(CONFIG.baseUrl, { waitUntil: 'domcontentloaded', timeout: 60000 });
-    await bypassCloudflare(page);
-    await sleep(CONFIG.renderWaitMs);
-
-    let totalPages = await detectTotalPages(page);
-    if (CONFIG.maxPages) totalPages = Math.min(totalPages, CONFIG.maxPages);
-    state.totalPages = totalPages;
+    console.log('📊 Fetching page 1 metadata...');
+    const first = await fetchJobsPage(context.request, 1);
+    state.total = first.meta?.total || 0;
+    state.perPage = first.meta?.per_page || first.data.length;
+    state.totalPages = first.meta?.last_page || 1;
+    if (CONFIG.maxPages) state.totalPages = Math.min(state.totalPages, CONFIG.maxPages);
+    // Save page 1 jobs immediately
+    for (const raw of first.data) {
+      const job = normalizeJob(raw);
+      if (job.id != null) state.jobsById[job.id] = job;
+    }
+    state.completedPages.push(1);
     saveState(state);
+    console.log(`📊 Total: ${state.total} jobs across ${state.totalPages} pages (${state.perPage}/page)`);
+    console.log(`  ✓ Page 1: got ${first.data.length} jobs`);
   }
-  console.log(`📊 Total pages: ${state.totalPages}`);
 
-  if (state.phase === 'list') {
-    const completedSet = new Set(state.completedPages);
-    const seenUrls = new Set(state.allJobs.map(j => j.url));
+  const completedSet = new Set(state.completedPages);
+  let pagesSinceSave = 0;
 
-    for (let p = 1; p <= state.totalPages; p++) {
-      if (completedSet.has(p)) continue;
-      console.log(`\n📄 Page ${p}/${state.totalPages}`);
-      try {
-        const jobs = await scrapeListPage(page, p);
-        const newJobs = jobs.filter(j => !seenUrls.has(j.url));
-        newJobs.forEach(j => seenUrls.add(j.url));
-        state.allJobs.push(...newJobs);
-        state.completedPages.push(p);
-        saveState(state);
-        console.log(`  ✓ Got ${jobs.length} (${newJobs.length} new, total: ${state.allJobs.length})`);
-      } catch (err) {
-        console.error(`  ❌ Page ${p} failed: ${err.message}`);
+  for (let p = 2; p <= state.totalPages; p++) {
+    if (shuttingDown) break;
+    if (completedSet.has(p)) continue;
+
+    try {
+      const resp = await fetchJobsPage(context.request, p);
+      for (const raw of resp.data) {
+        const job = normalizeJob(raw);
+        if (job.id != null) state.jobsById[job.id] = job;
       }
-
-      if (p % 5 === 0) await context.storageState({ path: CONFIG.cookiesFile });
-      await sleep(1500, 3500);
+      state.completedPages.push(p);
+      pagesSinceSave++;
+      console.log(`  ✓ Page ${p}/${state.totalPages}: got ${resp.data.length} (total unique: ${Object.keys(state.jobsById).length})`);
+    } catch (err) {
+      console.error(`  ❌ Page ${p} failed: ${err.message}`);
     }
 
-    const doneSet = new Set(state.completedPages);
-    const failed = [];
-    for (let p = 1; p <= state.totalPages; p++) if (!doneSet.has(p)) failed.push(p);
-    if (failed.length) {
-      console.log(`\n⚠️ ${failed.length} page(s) failed: [${failed.join(',')}]. Re-run to retry.`);
-      await page.close();
-      await context.storageState({ path: CONFIG.cookiesFile });
-      await browser.close();
-      console.timeEnd('⏱️ Total time');
-      return;
+    if (pagesSinceSave >= CONFIG.saveEvery) {
+      saveState(state);
+      pagesSinceSave = 0;
     }
-
-    state.phase = 'detail';
-    saveState(state);
+    if (p % 20 === 0) {
+      try { await context.storageState({ path: CONFIG.cookiesFile }); } catch {}
+    }
+    await sleep(CONFIG.pageDelayMs[0], CONFIG.pageDelayMs[1]);
   }
 
-  await page.close();
-  console.log(`\n📊 Total jobs collected: ${state.allJobs.length}`);
+  saveState(state);
 
-  if (state.phase === 'detail') {
-    const todo = state.allJobs.filter(j => !state.detailed[j.url]);
-    const alreadyDone = state.allJobs.length - todo.length;
-    console.log(`\n🔍 Scraping ${todo.length} details (${alreadyDone} already done)`);
-
-    const limit = pLimit(CONFIG.detailConcurrency);
-    let done = 0, lastSaveAt = 0;
-
-    const tasks = todo.map(job => limit(async () => {
-      if (shuttingDown) return;
-      try {
-        await sleep(800, 2000);
-        const detail = await scrapeJobDetail(context, job);
-        state.detailed[job.url] = detail;
-      } catch (err) {
-        console.error(`  ❌ ${job.title.slice(0, 40)}: ${err.message}`);
-        state.detailed[job.url] = job;
-      }
-      done++;
-      if (done - lastSaveAt >= CONFIG.saveEvery) {
-        saveState(state);
-        lastSaveAt = done;
-      }
-      if (done % 10 === 0) {
-        console.log(`  Progress: ${done}/${todo.length}`);
-      }
-    }));
-
-    await Promise.all(tasks);
-    saveState(state);
-    state.phase = 'done';
-    saveState(state);
+  const doneSet = new Set(state.completedPages);
+  const failed = [];
+  for (let p = 1; p <= state.totalPages; p++) if (!doneSet.has(p)) failed.push(p);
+  if (failed.length) {
+    console.log(`\n⚠️ ${failed.length} page(s) chưa xong: [${failed.slice(0, 20).join(',')}${failed.length > 20 ? ',...' : ''}]. Re-run để retry.`);
   }
 
-  await context.storageState({ path: CONFIG.cookiesFile });
+  try { await context.storageState({ path: CONFIG.cookiesFile }); } catch {}
   await browser.close();
 
-  const finalJobs = Object.values(state.detailed);
-  fs.writeFileSync(CONFIG.outputFile, JSON.stringify(finalJobs, null, 2));
-  console.log(`\n✅ Saved ${finalJobs.length} jobs to ${CONFIG.outputFile}`);
+  const jobs = Object.values(state.jobsById);
+  fs.writeFileSync(CONFIG.outputFile, JSON.stringify(jobs, null, 2));
+  console.log(`\n✅ Saved ${jobs.length} jobs to ${CONFIG.outputFile}`);
   console.timeEnd('⏱️ Total time');
 }
 
