@@ -101,6 +101,19 @@ async function fetchJobsPage(requestCtx, pageNum) {
 
 // ============ TRANSFORM ============
 
+const VI_UNIT_TO_EN = {
+  'phút': 'minutes', 'giờ': 'hours', 'ngày': 'days',
+  'tuần': 'weeks', 'tháng': 'months', 'năm': 'years',
+};
+
+// "14 giờ trước" → "14 hours ago" so dashboard.html's parsePostedAt regex matches.
+function viRelativeToEn(s) {
+  if (!s || typeof s !== 'string') return '';
+  const m = s.match(/^(\d+)\s+(phút|giờ|ngày|tuần|tháng|năm)\s+trước/i);
+  if (!m) return s;
+  return `${m[1]} ${VI_UNIT_TO_EN[m[2].toLowerCase()]} ago`;
+}
+
 function normalizeJob(raw) {
   const url = raw.detail_url || (raw.slug ? `https://topdev.vn/detail-jobs/${raw.slug}-${raw.id}` : '');
 
@@ -162,6 +175,12 @@ function normalizeJob(raw) {
     benefits: benefitsParts.join('\n\n').trim(),
     published: raw.published || '',
     refreshed: raw.refreshed || '',
+    // Compat aliases for the shared dashboard.html (inherited from
+    // itviec-scraper). Keep the originals above too.
+    location: locations.join(', '),
+    workingMode: raw.job_types_str || '',
+    postedTime: viRelativeToEn(raw.refreshed?.since || raw.published?.since || ''),
+    skills: tags,
     expires: raw.expires || '',
     scrapedAt: new Date().toISOString(),
   };
