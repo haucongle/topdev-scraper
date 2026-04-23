@@ -16,6 +16,8 @@ const CONFIG = {
   },
   locale: 'vi_VN',
   referer: 'https://topdev.vn/jobs/search',
+  // API default is 15 but honors `page_size` up to at least 1000.
+  pageSize: 1000,
 
   maxPages: null,
   outputFile: 'topdev-jobs.json',
@@ -70,6 +72,7 @@ function htmlToText(html) {
 function buildApiUrl(pageNum) {
   const params = new URLSearchParams();
   params.set('page', String(pageNum));
+  params.set('page_size', String(CONFIG.pageSize));
   params.set('fields[job]', CONFIG.apiFields.job);
   params.set('fields[company]', CONFIG.apiFields.company);
   params.set('locale', CONFIG.locale);
@@ -84,7 +87,7 @@ async function fetchJobsPage(requestCtx, pageNum) {
       Origin: 'https://topdev.vn',
       Referer: CONFIG.referer,
     },
-    timeout: 30000,
+    timeout: 90000,
   });
   if (!res.ok()) {
     throw new Error(`API HTTP ${res.status()} for page ${pageNum}`);
