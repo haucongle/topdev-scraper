@@ -1,7 +1,7 @@
 name: Crawl TopDev jobs
 
 on:
-  # 00:15 UTC = 07:15 ICT — lệch 15 phút so với ITviec để không chạy cùng lúc
+  # 00:15 UTC = 07:15 ICT — lệch 15 phút so với itviec để không chạy cùng lúc
   schedule:
     - cron: '15 0 * * *'
   workflow_dispatch:
@@ -14,9 +14,10 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  crawl:
+  # Split: scrape → artifact → commit (re-run commit-only khi race fail)
+  scrape:
     runs-on: ubuntu-latest
-    timeout-minutes: 60  # TopDev CSR render chậm hơn → buffer lớn hơn
+    timeout-minutes: 60
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +41,7 @@ jobs:
             node build-cookies.js
             echo "✓ Cookies loaded"
           else
-            echo "⚠ No TOPDEV_COOKIES_RAW secret — scraping không login."
+            echo "⚠ No TOPDEV_COOKIES_RAW secret"
           fi
 
       - name: Ensure fresh state
@@ -48,6 +49,40 @@ jobs:
 
       - name: Crawl
         run: node scraper.js
+
+      - name: Upload jobs.json artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: topdev-jobs
+          path: topdev-jobs.json
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Upload debug artifacts on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: crawl-debug-${{ github.run_id }}
+          path: |
+            topdev-state.json
+            topdev-jobs.json
+            debug-page1.html
+          if-no-files-found: ignore
+          retention-days: 7
+
+  commit:
+    needs: scrape
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download jobs.json artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: topdev-jobs
 
       - name: Commit updated jobs.json
         run: |
@@ -69,17 +104,5 @@ jobs:
             echo "⚠ Attempt $i failed, retry in 5s..."
             sleep 5
           done
-          echo "::error::Failed to push after 3 attempts"
+          echo "::error::Failed to push after 3 attempts — re-run this job only when the race clears."
           exit 1
-
-      - name: Upload state file on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: crawl-debug-${{ github.run_id }}
-          path: |
-            topdev-state.json
-            topdev-jobs.json
-            debug-page1.html
-          if-no-files-found: ignore
-          retention-days: 7
