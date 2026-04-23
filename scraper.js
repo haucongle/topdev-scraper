@@ -36,17 +36,50 @@ const sleep = (min, max = min) => new Promise(r =>
 
 // ============ HTML CLEANUP ============
 
+// Named HTML entities — covers Latin-1 supplement (Vietnamese diacritics
+// like &ocirc; → ô, &aacute; → á) plus common typography marks.
+// Numeric entities (&#NNN; / &#xNNN;) are handled separately below.
 const HTML_ENTITIES = {
-  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&#39;': "'",
-  '&apos;': "'", '&nbsp;': ' ', '&ndash;': '–', '&mdash;': '—',
-  '&hellip;': '…', '&rsquo;': '’', '&lsquo;': '‘', '&rdquo;': '”', '&ldquo;': '“',
+  '&amp;': '&', '&lt;': '<', '&gt;': '>', '&quot;': '"', '&apos;': "'", '&#39;': "'",
+  '&nbsp;': ' ',
+  // Latin-1 uppercase
+  '&Agrave;': 'À', '&Aacute;': 'Á', '&Acirc;': 'Â', '&Atilde;': 'Ã',
+  '&Auml;': 'Ä', '&Aring;': 'Å', '&AElig;': 'Æ', '&Ccedil;': 'Ç',
+  '&Egrave;': 'È', '&Eacute;': 'É', '&Ecirc;': 'Ê', '&Euml;': 'Ë',
+  '&Igrave;': 'Ì', '&Iacute;': 'Í', '&Icirc;': 'Î', '&Iuml;': 'Ï',
+  '&ETH;': 'Ð', '&Ntilde;': 'Ñ',
+  '&Ograve;': 'Ò', '&Oacute;': 'Ó', '&Ocirc;': 'Ô', '&Otilde;': 'Õ',
+  '&Ouml;': 'Ö', '&Oslash;': 'Ø',
+  '&Ugrave;': 'Ù', '&Uacute;': 'Ú', '&Ucirc;': 'Û', '&Uuml;': 'Ü',
+  '&Yacute;': 'Ý', '&THORN;': 'Þ', '&szlig;': 'ß',
+  // Latin-1 lowercase
+  '&agrave;': 'à', '&aacute;': 'á', '&acirc;': 'â', '&atilde;': 'ã',
+  '&auml;': 'ä', '&aring;': 'å', '&aelig;': 'æ', '&ccedil;': 'ç',
+  '&egrave;': 'è', '&eacute;': 'é', '&ecirc;': 'ê', '&euml;': 'ë',
+  '&igrave;': 'ì', '&iacute;': 'í', '&icirc;': 'î', '&iuml;': 'ï',
+  '&eth;': 'ð', '&ntilde;': 'ñ',
+  '&ograve;': 'ò', '&oacute;': 'ó', '&ocirc;': 'ô', '&otilde;': 'õ',
+  '&ouml;': 'ö', '&oslash;': 'ø',
+  '&ugrave;': 'ù', '&uacute;': 'ú', '&ucirc;': 'û', '&uuml;': 'ü',
+  '&yacute;': 'ý', '&thorn;': 'þ', '&yuml;': 'ÿ',
+  // Typography
+  '&ndash;': '–', '&mdash;': '—', '&hellip;': '…',
+  '&lsquo;': '‘', '&rsquo;': '’', '&ldquo;': '“', '&rdquo;': '”',
+  '&bull;': '•', '&middot;': '·', '&trade;': '™', '&copy;': '©', '&reg;': '®',
+  '&deg;': '°', '&plusmn;': '±', '&times;': '×', '&divide;': '÷',
+  '&laquo;': '«', '&raquo;': '»', '&iexcl;': '¡', '&iquest;': '¿',
+  '&sect;': '§', '&para;': '¶', '&euro;': '€', '&pound;': '£', '&yen;': '¥', '&cent;': '¢',
+  '&larr;': '←', '&rarr;': '→', '&uarr;': '↑', '&darr;': '↓', '&harr;': '↔',
+  '&lArr;': '⇐', '&rArr;': '⇒', '&uArr;': '⇑', '&dArr;': '⇓', '&hArr;': '⇔',
+  '&check;': '✓', '&cross;': '✗',
+  '&le;': '≤', '&ge;': '≥', '&ne;': '≠', '&asymp;': '≈', '&infin;': '∞',
 };
 
 function decodeEntities(s) {
   return s
     .replace(/&#(\d+);/g, (_, n) => String.fromCharCode(parseInt(n, 10)))
     .replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16)))
-    .replace(/&[a-z]+;/gi, m => HTML_ENTITIES[m.toLowerCase()] ?? m);
+    .replace(/&[A-Za-z]+;/g, m => HTML_ENTITIES[m] ?? m);
 }
 
 // Turn TopDev's rich-text HTML into bullet-list plain text.
