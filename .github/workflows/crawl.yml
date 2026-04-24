@@ -1,9 +1,9 @@
 name: Crawl TopDev jobs
 
 on:
-  # 00:15 UTC = 07:15 ICT — lệch 15 phút so với itviec để không chạy cùng lúc
+  # 01:23 UTC = 08:23 ICT — off-peak minute (GH delays/drops schedules near :00/:15/:30/:45)
   schedule:
-    - cron: '15 0 * * *'
+    - cron: '23 1 * * *'
   workflow_dispatch:
 
 permissions:
